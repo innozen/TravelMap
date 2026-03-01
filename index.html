@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Travel Map</title>
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;500;700&family=Noto+Sans+KR:wght@300;500;700&display=swap"
+        rel="stylesheet">
+    <!-- D3.js & exifr & topojson -->
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://unpkg.com/topojson-client@3"></script>
+    <script src="https://cdn.jsdelivr.net/npm/exifr/dist/lite.umd.js"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <!-- Background Animation -->
+    <div class="bg-animation">
+        <div class="blob blob-1"></div>
+        <div class="blob blob-2"></div>
+        <div class="blob blob-3"></div>
+    </div>
+
+    <div class="app-container">
+        <div class="header-wrapper" style="position: relative; z-index: 10;">
+            <header class="app-header glass-panel">
+                <a href="../Portal/index.html" class="back-btn">
+                    <span>←</span> Portal
+                </a>
+                <div class="title-container" style="flex: 1; text-align: center;">
+                    <h1>Korea Travel Map</h1>
+                    <p>지역을 클릭하거나 <strong>사진</strong>을 올려 기록을 남겨보세요</p>
+                </div>
+            </header>
+
+            <div class="header-actions">
+                <div class="upload-container">
+                    <input type="file" id="photo-upload-input" accept="image/jpeg, image/png, image/heic"
+                        class="hidden">
+                    <button class="action-btn primary" id="upload-photo-btn"
+                        style="padding: 0.75rem 1rem; font-size: 0.95rem; margin: 0; white-space: nowrap; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);">📸
+                        사진으로 추가</button>
+                </div>
+                <div class="stats-container" id="stats-btn" style="cursor: pointer;" title="방문한 지역 목록 보기">
+                    <span class="visited-count">Visited: <strong id="visited-count">0</strong></span>
+                </div>
+            </div>
+        </div>
+
+        <main class="map-container glass-panel">
+            <div id="loading" class="loading-spinner">Loading Map...</div>
+            <svg id="korea-map"></svg>
+            <div class="tooltip" id="map-tooltip"></div>
+        </main>
+    </div>
+
+    <!-- Modal for Data Entry and Viewing -->
+    <div class="modal-overlay" id="travel-modal">
+        <div class="modal-content glass-panel">
+            <div class="modal-header">
+                <h2 id="region-name">Region</h2>
+                <button class="close-btn" id="close-modal">×</button>
+            </div>
+
+            <!-- View Mode -->
+            <div id="view-mode" class="modal-body hidden">
+                <div class="travel-details">
+                    <div class="detail-row">
+                        <span class="detail-label">Date</span>
+                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                            <span class="detail-value" id="view-date"></span>
+                            <button class="icon-btn-small edit-field-btn" data-target="travel-date"
+                                title="수정">✎</button>
+                        </div>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">Companions</span>
+                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                            <span class="detail-value" id="view-companions"></span>
+                            <button class="icon-btn-small edit-field-btn" data-target="companions" title="수정">✎</button>
+                        </div>
+                    </div>
+                    <div class="detail-row" style="flex-direction: column; align-items: flex-start; gap: 0.5rem;">
+                        <div style="display: flex; justify-content: space-between; width: 100%;">
+                            <span class="detail-label">Travel Notes</span>
+                            <button class="icon-btn-small edit-field-btn" data-target="travel-notes"
+                                title="수정">✎</button>
+                        </div>
+                        <p class="detail-value" id="view-notes"
+                            style="width: 100%; white-space: pre-wrap; font-size: 0.95rem; line-height: 1.5; color: var(--text-primary); margin: 0;">
+                        </p>
+                    </div>
+                </div>
+                <div class="photo-container hidden" id="photo-box" style="position: relative;">
+                    <button class="icon-btn-small edit-field-btn" data-target="photo-upload-input" title="사진 수정"
+                        style="position: absolute; top: 0.5rem; right: 0.5rem; background: rgba(0,0,0,0.5);">✎</button>
+                    <img id="view-photo" src="" alt="Travel Photo" />
+                </div>
+                <button class="action-btn" id="edit-record-btn">Edit Record</button>
+            </div>
+
+            <!-- Edit Mode -->
+            <div id="edit-mode" class="modal-body">
+                <form id="travel-form">
+                    <div class="form-group">
+                        <label for="travel-date">Date of Visit</label>
+                        <input type="date" id="travel-date" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="companions">Companions</label>
+                        <input type="text" id="companions" placeholder="e.g., Family, Friends, Solo...">
+                    </div>
+                    <div class="form-group">
+                        <label for="travel-notes">Travel Notes</label>
+                        <textarea id="travel-notes" placeholder="Write about your journey..." rows="3"
+                            style="width: 100%; padding: 0.75rem 1rem; background: rgba(0, 0, 0, 0.2); border: 1px solid var(--glass-border); border-radius: 12px; color: var(--text-primary); font-size: 1rem; outline: none; transition: border-color 0.2s, background 0.2s; resize: vertical;"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="photo-url">Photo URL (원격 주소 유지 시 사용)</label>
+                        <input type="text" id="photo-url" placeholder="https://example.com/photo.jpg">
+                        <div id="upload-preview-container" class="hidden"
+                            style="margin-top: 1rem; border-radius: 12px; overflow: hidden; max-height: 200px; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.3);">
+                            <img id="upload-preview" src="" style="width: 100%; height: auto; object-fit: contain;">
+                        </div>
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" class="action-btn primary">Save Journey</button>
+                        <button type="button" class="action-btn danger hidden" id="delete-record-btn">Delete</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for Visited List -->
+    <div class="modal-overlay" id="list-modal">
+        <div class="modal-content glass-panel">
+            <div class="modal-header">
+                <h2>방문한 지역 목록</h2>
+                <button class="close-btn" id="close-list-modal">×</button>
+            </div>
+
+            <div class="modal-body">
+                <ul class="visited-list" id="visited-list-container">
+                    <!-- List items will be injected here via JS -->
+                </ul>
+                <div class="list-actions" style="margin-top: 1.5rem;">
+                    <button class="action-btn danger" id="clear-all-btn">모든 기록 초기화</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+
+</html>
